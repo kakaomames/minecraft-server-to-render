@@ -1,23 +1,22 @@
 import subprocess
 import os
 import threading
+import requests
+import zipfile
+import io
 from flask import Flask, render_template_string
 
-# Flaskアプリケーションを初期化
 app = Flask(__name__)
 
 # --- Minecraftサーバーの設定 ---
-# Minecraftサーバーの実行ファイルを指定
-# Render上で動かすので、実行ファイルはプロジェクトのルートに配置します
-# Linux環境なので、実行権限を付与しておきましょう
 SERVER_EXECUTABLE = "./bedrock_server"
+# Linux版 Bedrock Dedicated ServerのダウンロードURL
+SERVER_URL = "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.102.1.zip"
 
-# サーバープロセスを管理するためのグローバル変数
-# threading.Lockは、複数のリクエストが同時にサーバーの状態を変更するのを防ぐために使います
 server_process = None
 process_lock = threading.Lock()
 
-# HTMLテンプレート
+# HTMLテンプレート (変更なし)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ja">
@@ -47,41 +46,47 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# ルートURL（/）にアクセスしたときに表示するページ
+def download_and_extract_server():
+    """Minecraftサーバーをダウンロード・展開する関数"""
+    print("Minecraftサーバーのファイルが見つかりません。ダウンロードを開始します...")
+    try:
+        r = requests.get(SERVER_URL, stream=True)
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        z.extractall(".") # カレントディレクトリに展開
+        print("ダウンロードと展開が完了しました。")
+        # 実行権限を付与
+        os.chmod(SERVER_EXECUTABLE, 0o755)
+    except Exception as e:
+        print(f"ダウンロードまたは展開中にエラーが発生しました: {e}")
+
 @app.route("/")
 def index():
     with process_lock:
         status = "起動中" if server_process and server_process.poll() is None else "停止中"
     return render_template_string(HTML_TEMPLATE, status=status)
 
-# サーバーを起動するエンドポイント
 @app.route("/start", methods=["POST"])
 def start_server():
     global server_process
     with process_lock:
         if server_process is None or server_process.poll() is not None:
-            # サーバーの実行ファイルに実行権限を付与（Render環境向け）
-            if not os.access(SERVER_EXECUTABLE, os.X_OK):
-                os.chmod(SERVER_EXECUTABLE, 0o755)
-            # `subprocess.Popen`を使って、サーバーを新しいプロセスとして起動
-            # `preexec_fn=os.setsid` は、Webサービスが停止してもサーバープロセスが生き残るようにします
+            # サーバー実行ファイルが存在するかチェック
+            if not os.path.exists(SERVER_EXECUTABLE):
+                download_and_extract_server()
+                
             server_process = subprocess.Popen([SERVER_EXECUTABLE], preexec_fn=os.setsid)
     return index()
 
-# サーバーを停止するエンドポイント
 @app.route("/stop", methods=["POST"])
 def stop_server():
     global server_process
     with process_lock:
         if server_process and server_process.poll() is None:
-            # プロセスグループ全体を終了させる
             os.killpg(os.getpgid(server_process.pid), 9)
             server_process.wait()
             server_process = None
     return index()
 
-# アプリケーションの実行
 if __name__ == "__main__":
-    # Render環境ではPORT変数が自動で設定されるため、それを使う
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
