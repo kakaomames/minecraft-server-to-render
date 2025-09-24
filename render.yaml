@@ -2,6 +2,10 @@ services:
   - type: web
     name: minecraft-server-manager
     env: python
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: |
+      pip install -r requirements.txt
+      curl -O https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.102.1.zip
+      unzip bedrock-server-1.21.102.1.zip
+      rm bedrock-server-1.21.102.1.zip
     startCommand: "python app.py"
     plan: free
