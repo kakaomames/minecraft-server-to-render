@@ -40,50 +40,60 @@ def index():
     """
     return render_template_string(html)
 
-# Linuxバイナリ実行エンドポイント
+# Linuxバイナリ実行エンド
+# app.py 内の run_app 関数を以下に置き換えてください。
+
 @app.route('/run_app', methods=['POST'])
 def run_app():
-    # 実行権限を念のため付与 (デプロイ環境で実行権限がない場合があるため)
+    # 実行ファイルのパス (Dockerfileで設定した LINUX_BINARY_NAME と一致しているか再確認)
+    EXECUTABLE_PATH = f"./{LINUX_BINARY_NAME}"
+    
+    # 実行権限を念のため付与 (Render環境では一度設定しても失われる可能性があるため)
     try:
         os.chmod(EXECUTABLE_PATH, 0o755)
+        print("実行権限を付与しました。")
     except Exception as e:
-        print(f"chmod error: {e}")
+        # chmodに失敗しても続行
+        print(f"chmod error: {e}") 
 
     try:
-        # 実行可能であることを確認
-        if not os.path.exists(EXECUTABLE_PATH):
-            return f'<h2>❌ エラー: 実行ファイルが見つかりません。</h2><p>パス: <code>{EXECUTABLE_PATH}</code></p><p><a href="/">戻る</a></p>'
-        
-        # subprocess.run を使用して実行し、標準出力を取得
-        # shell=Trueはセキュリティリスクがあるため、推奨しません。
-        # ここでは、出力を待って成功/失敗を判定します。
-        
-        # 🚨 補足: 100MB超のアプリが長時間実行される場合、タイムアウトに注意が必要です。
-        # RenderやVercelでは、応答に時間がかかりすぎると接続が切断されます。
-        
+        # 🚨 タイムアウトを60秒に延長 (100MB超のアプリは起動に時間がかかるため)
+        # 🚨 check=False にし、戻り値が非ゼロでもエラー画面に詳細を表示させる
         result = subprocess.run(
             [EXECUTABLE_PATH], 
             capture_output=True, 
             text=True, 
-            check=True, # 戻り値が非ゼロの場合にCalledProcessErrorを発生させる
-            timeout=30 # 実行タイムアウト（必要に応じて調整）
+            check=False, # 戻り値が非ゼロでも例外にせず、詳細を出力
+            timeout=60 # 60秒に延長
         )
 
-        output = result.stdout
-        print(f"アプリの実行が完了しました。出力:\n{output}")
+        stdout = result.stdout
+        stderr = result.stderr
+        return_code = result.returncode
+
+        print(f"アプリの実行が完了しました。戻り値: {return_code}")
+        print(f"stdout:\n{stdout}")
+        print(f"stderr:\n{stderr}")
         
-        # 実行成功メッセージとアプリの出力を表示
-        return f'<h2>✅ Linuxアプリの実行が完了しました！</h2><p>アプリケーションからの出力:</p><pre>{output}</pre><p><a href="/">戻る</a></p>'
-    
-    except subprocess.CalledProcessError as e:
-        print(f"アプリの実行中にエラーが発生しました: {e.stderr}")
-        return f'<h2>❌ アプリの実行エラーが発生しました。</h2><p>標準エラー出力: {e.stderr}</p><p><a href="/">戻る</a></p>'
+        # 実行結果を詳細に表示するHTMLを返す
+        html_output = f"""
+        <h2>✅ 実行結果 ({'成功' if return_code == 0 else '失敗'})</h2>
+        <p>戻り値: {return_code}</p>
+        
+        <h3>標準出力 (stdout):</h3>
+        <pre style="background-color: #eee; padding: 10px;">{stdout}</pre>
+        
+        <h3>標準エラー出力 (stderr):</h3>
+        <pre style="background-color: #fee; padding: 10px;">{stderr}</pre>
+        
+        <p><a href="/">戻る</a></p>
+        """
+        return render_template_string(html_output)
     
     except subprocess.TimeoutExpired:
         print("アプリが時間内に応答しませんでした。")
-        return f'<h2>❌ アプリの実行がタイムアウトしました。</h2><p>アプリケーションが30秒以内に終了しませんでした。長時間処理の場合は、非同期処理を検討してください。</p><p><a href="/">戻る</a></p>'
-
-# GunicornなどWebサーバーの起動に対応するため、__name__ == '__main__'ブロックは削除します。
-# デプロイ環境ではGunicornがWSGIを呼び出すため、ローカル実行が必要な場合のみ以下を追加してください。
-# if __name__ == '__main__':
-#     app.run(debug=True, port=5000)
+        return '<h2>❌ アプリの実行がタイムアウトしました。</h2><p>アプリケーションが60秒以内に終了しませんでした。</p><p><a href="/">戻る</a></p>'
+    
+    except Exception as e:
+        print(f"実行中に予期せぬエラーが発生しました: {e}")
+        return f'<h2>❌ 実行中に予期せぬエラーが発生しました。</h2><p>Python例外: {e}</p><p><a href="/">戻る</a></p>'
