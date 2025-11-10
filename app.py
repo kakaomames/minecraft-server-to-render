@@ -7,7 +7,7 @@ app = Flask(__name__)
 print(f"app:{app}")
 
 # 🚨 Linuxバイナリのファイル名 (このファイルをプロジェクトフォルダに置いてください)
-LINUX_BINARY_NAME = "your_linux_app" 
+LINUX_BINARY_NAME = "bedrock_server" 
 print(f"LINUX_BINARY_NAME:{LINUX_BINARY_NAME}")
 
 # バイナリファイルの実行パスを設定
