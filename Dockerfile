@@ -7,8 +7,10 @@ RUN apt-get update && apt-get install -y wget curl gnupg && \
     pip install gdown gunicorn
 
 # 🚨 環境変数の設定
-ENV G_DRIVE_FILE_ID="16OlbXH73OzxJvUd80k0ARC0wAzgNm5_-" # bedrock_serverのファイルID
-ENV LINUX_BINARY_NAME="bedrock_server" # サーバーのバイナリ名はこれに固定します
+ENV G_DRIVE_FILE_ID="16OlbXH73OzxJvUd80k0ARC0wAzgNm5_-"
+# bedrock_serverのファイルID
+ENV LINUX_BINARY_NAME="bedrock_server"
+# サーバーのバイナリ名はこれに固定します
 
 # 作業ディレクトリの設定
 WORKDIR /usr/src/app
