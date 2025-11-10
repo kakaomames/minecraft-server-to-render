@@ -8,7 +8,8 @@ RUN apt-get update && apt-get install -y wget curl gnupg && \
 
 # 🚨 環境変数の設定 (ファイル ID をここで指定)
 ENV G_DRIVE_FILE_ID="16OlbXH73OzxJvUd80k0ARC0wAzgNm5_-"
-ENV LINUX_BINARY_NAME="your_linux_app" # 実行ファイル名 (お好みで変更可)
+ENV LINUX_BINARY_NAME="your_linux_app"
+# 実行ファイル名 (お好みで変更可)
 
 # 作業ディレクトリの設定
 WORKDIR /usr/src/app
