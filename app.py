@@ -1,133 +1,89 @@
 import subprocess
+from flask import Flask, render_template_string
 import os
-import threading
-import requests
-import zipfile
-import io
-import configparser
-from flask import Flask, render_template_string, request, redirect, url_for
 
+# Flaskアプリケーションの初期化
 app = Flask(__name__)
+print(f"app:{app}")
 
-# --- Minecraftサーバーの設定 ---
-SERVER_EXECUTABLE = "./bedrock_server"
-SERVER_URL = "https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.102.1.zip"
-PROPERTIES_FILE = "./server.properties"
+# 🚨 Linuxバイナリのファイル名 (このファイルをプロジェクトフォルダに置いてください)
+LINUX_BINARY_NAME = "your_linux_app" 
+print(f"LINUX_BINARY_NAME:{LINUX_BINARY_NAME}")
 
-server_process = None
-process_lock = threading.Lock()
+# バイナリファイルの実行パスを設定
+# コンテナまたは実行環境のルートにある想定
+EXECUTABLE_PATH = f"./{LINUX_BINARY_NAME}"
+print(f"EXECUTABLE_PATH:{EXECUTABLE_PATH}")
 
-# HTMLテンプレートを更新
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>Minecraft サーバー管理</title>
-    <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 50px; }
-        .status { font-size: 24px; font-weight: bold; }
-        .controls, .settings { margin-top: 20px; }
-        button { padding: 10px 20px; font-size: 16px; margin: 5px; cursor: pointer; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        .settings-form { max-width: 600px; margin: 20px auto; text-align: left; border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
-        .settings-form label { display: block; margin: 10px 0 5px; font-weight: bold; }
-        .settings-form input[type="text"] { width: 95%; padding: 8px; }
-        .settings-form input[type="submit"] { background-color: #4CAF50; color: white; border: none; padding: 10px 20px; cursor: pointer; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <h1>Minecraft サーバー管理パネル</h1>
-    <p>サーバーの状態: <span class="status">{{ status }}</span></p>
-    <div class="controls">
-        <form action="/start" method="post" style="display:inline;">
-            <button type="submit" {% if status == '起動中' %}disabled{% endif %}>サーバーを起動</button>
-        </form>
-        <form action="/stop" method="post" style="display:inline;">
-            <button type="submit" {% if status == '停止中' %}disabled{% endif %}>サーバーを停止</button>
-        </form>
-    </div>
-
-    <hr>
-    
-    <h2>サーバー設定</h2>
-    <div class="settings">
-        <form action="/save_settings" method="post" class="settings-form">
-            {% for key, value in settings.items() %}
-                <label for="{{ key }}">{{ key }}</label>
-                <input type="text" id="{{ key }}" name="{{ key }}" value="{{ value }}">
-            {% endfor %}
-            <input type="submit" value="設定を保存">
-        </form>
-    </div>
-</body>
-</html>
-"""
-
-def download_and_extract_server():
-    print("Minecraftサーバーのファイルが見つかりません。ダウンロードを開始します...")
-    try:
-        r = requests.get(SERVER_URL, stream=True)
-        z = zipfile.ZipFile(io.BytesIO(r.content))
-        z.extractall(".")
-        print("ダウンロードと展開が完了しました。")
-        os.chmod(SERVER_EXECUTABLE, 0o755)
-    except Exception as e:
-        print(f"ダウンロードまたは展開中にエラーが発生しました: {e}")
-
-def read_server_properties():
-    """server.propertiesファイルを読み込み、辞書として返す"""
-    config = configparser.ConfigParser()
-    config.optionxform = str  # キー名を小文字に変換しないようにする
-    config.read_string("[server_settings]\n" + open(PROPERTIES_FILE, 'r').read())
-    return dict(config['server_settings'])
-
-def write_server_properties(settings):
-    """辞書の内容をserver.propertiesファイルに書き込む"""
-    with open(PROPERTIES_FILE, 'w') as f:
-        for key, value in settings.items():
-            f.write(f"{key}={value}\n")
-
-@app.route("/")
+# ホームページ
+@app.route('/')
 def index():
-    with process_lock:
-        status = "起動中" if server_process and server_process.poll() is None else "停止中"
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head>
+        <meta charset="UTF-8">
+        <title>Linuxバイナリ実行アプリ</title>
+        <style>
+            body {{ font-family: sans-serif; text-align: center; margin-top: 50px; }}
+            button {{ padding: 10px 20px; font-size: 18px; cursor: pointer; }}
+        </style>
+    </head>
+    <body>
+        <h1>Linuxバイナリ実行アプリ</h1>
+        <p>下のボタンを押すと、クラウドサーバー上で {LINUX_BINARY_NAME} が実行されます。</p>
+        <form action="/run_app" method="post">
+            <button type="submit">🚀 Linuxアプリを実行する</button>
+        </form>
+    </body>
+    </html>
+    """
+    return render_template_string(html)
 
-    settings = {}
-    if os.path.exists(PROPERTIES_FILE):
-        settings = read_server_properties()
+# Linuxバイナリ実行エンドポイント
+@app.route('/run_app', methods=['POST'])
+def run_app():
+    # 実行権限を念のため付与 (デプロイ環境で実行権限がない場合があるため)
+    try:
+        os.chmod(EXECUTABLE_PATH, 0o755)
+    except Exception as e:
+        print(f"chmod error: {e}")
+
+    try:
+        # 実行可能であることを確認
+        if not os.path.exists(EXECUTABLE_PATH):
+            return f'<h2>❌ エラー: 実行ファイルが見つかりません。</h2><p>パス: <code>{EXECUTABLE_PATH}</code></p><p><a href="/">戻る</a></p>'
+        
+        # subprocess.run を使用して実行し、標準出力を取得
+        # shell=Trueはセキュリティリスクがあるため、推奨しません。
+        # ここでは、出力を待って成功/失敗を判定します。
+        
+        # 🚨 補足: 100MB超のアプリが長時間実行される場合、タイムアウトに注意が必要です。
+        # RenderやVercelでは、応答に時間がかかりすぎると接続が切断されます。
+        
+        result = subprocess.run(
+            [EXECUTABLE_PATH], 
+            capture_output=True, 
+            text=True, 
+            check=True, # 戻り値が非ゼロの場合にCalledProcessErrorを発生させる
+            timeout=30 # 実行タイムアウト（必要に応じて調整）
+        )
+
+        output = result.stdout
+        print(f"アプリの実行が完了しました。出力:\n{output}")
+        
+        # 実行成功メッセージとアプリの出力を表示
+        return f'<h2>✅ Linuxアプリの実行が完了しました！</h2><p>アプリケーションからの出力:</p><pre>{output}</pre><p><a href="/">戻る</a></p>'
     
-    return render_template_string(HTML_TEMPLATE, status=status, settings=settings)
+    except subprocess.CalledProcessError as e:
+        print(f"アプリの実行中にエラーが発生しました: {e.stderr}")
+        return f'<h2>❌ アプリの実行エラーが発生しました。</h2><p>標準エラー出力: {e.stderr}</p><p><a href="/">戻る</a></p>'
+    
+    except subprocess.TimeoutExpired:
+        print("アプリが時間内に応答しませんでした。")
+        return f'<h2>❌ アプリの実行がタイムアウトしました。</h2><p>アプリケーションが30秒以内に終了しませんでした。長時間処理の場合は、非同期処理を検討してください。</p><p><a href="/">戻る</a></p>'
 
-@app.route("/save_settings", methods=["POST"])
-def save_settings():
-    # POSTされたフォームデータを取得し、設定ファイルに書き込む
-    settings = request.form
-    if settings:
-        write_server_properties(settings)
-    return redirect(url_for('index'))
-
-@app.route("/start", methods=["POST"])
-def start_server():
-    global server_process
-    with process_lock:
-        if server_process is None or server_process.poll() is not None:
-            if not os.path.exists(SERVER_EXECUTABLE):
-                download_and_extract_server()
-                
-            server_process = subprocess.Popen([SERVER_EXECUTABLE], preexec_fn=os.setsid)
-    return index()
-
-@app.route("/stop", methods=["POST"])
-def stop_server():
-    global server_process
-    with process_lock:
-        if server_process and server_process.poll() is None:
-            os.killpg(os.getpgid(server_process.pid), 9)
-            server_process.wait()
-            server_process = None
-    return index()
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+# GunicornなどWebサーバーの起動に対応するため、__name__ == '__main__'ブロックは削除します。
+# デプロイ環境ではGunicornがWSGIを呼び出すため、ローカル実行が必要な場合のみ以下を追加してください。
+# if __name__ == '__main__':
+#     app.run(debug=True, port=5000)
