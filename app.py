@@ -41,59 +41,40 @@ def index():
     return render_template_string(html)
 
 # Linuxバイナリ実行エンド
-# app.py 内の run_app 関数を以下に置き換えてください。
+# app.py の run_app 関数を以下に置き換えてください。
 
 @app.route('/run_app', methods=['POST'])
 def run_app():
-    # 実行ファイルのパス (Dockerfileで設定した LINUX_BINARY_NAME と一致しているか再確認)
+    # 実行ファイルのパス
     EXECUTABLE_PATH = f"./{LINUX_BINARY_NAME}"
     
-    # 実行権限を念のため付与 (Render環境では一度設定しても失われる可能性があるため)
     try:
         os.chmod(EXECUTABLE_PATH, 0o755)
-        print("実行権限を付与しました。")
     except Exception as e:
-        # chmodに失敗しても続行
         print(f"chmod error: {e}") 
 
     try:
-        # 🚨 タイムアウトを60秒に延長 (100MB超のアプリは起動に時間がかかるため)
-        # 🚨 check=False にし、戻り値が非ゼロでもエラー画面に詳細を表示させる
-        result = subprocess.run(
+        # 🚨 修正点: subprocess.run を subprocess.Popen に変更！
+        # Popen はプロセスをバックグラウンドで起動し、すぐに制御を返します。
+        # Web アプリはフリーズしません。
+        
+        # サーバーの標準出力/エラー出力を無視して、親プロセス (Flask) にブロックされないようにします。
+        # ログを確認したい場合は、ファイルにリダイレクトするなどの工夫が必要です。
+        
+        process = subprocess.Popen(
             [EXECUTABLE_PATH], 
-            capture_output=True, 
-            text=True, 
-            check=False, # 戻り値が非ゼロでも例外にせず、詳細を出力
-            timeout=60 # 60秒に延長
+            # サーバーの出力を捨てることで、Pipeが詰まるのを防ぎます
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL,
+            # Render の環境では、シェルを使わない方がクリーンです
+            # shell=False 
         )
 
-        stdout = result.stdout
-        stderr = result.stderr
-        return_code = result.returncode
-
-        print(f"アプリの実行が完了しました。戻り値: {return_code}")
-        print(f"stdout:\n{stdout}")
-        print(f"stderr:\n{stderr}")
+        print(f"マイクラ Bedrock サーバーを PID: {process.pid} でバックグラウンド起動しました！")
         
-        # 実行結果を詳細に表示するHTMLを返す
-        html_output = f"""
-        <h2>✅ 実行結果 ({'成功' if return_code == 0 else '失敗'})</h2>
-        <p>戻り値: {return_code}</p>
-        
-        <h3>標準出力 (stdout):</h3>
-        <pre style="background-color: #eee; padding: 10px;">{stdout}</pre>
-        
-        <h3>標準エラー出力 (stderr):</h3>
-        <pre style="background-color: #fee; padding: 10px;">{stderr}</pre>
-        
-        <p><a href="/">戻る</a></p>
-        """
-        return render_template_string(html_output)
-    
-    except subprocess.TimeoutExpired:
-        print("アプリが時間内に応答しませんでした。")
-        return '<h2>❌ アプリの実行がタイムアウトしました。</h2><p>アプリケーションが60秒以内に終了しませんでした。</p><p><a href="/">戻る</a></p>'
+        # 起動成功のレスポンスを即座に返す
+        return f'<h2>✅ サーバーをバックグラウンドで起動しました！</h2><p>Renderはサーバー実行専用ではないため、起動直後に落ちる可能性もありますが、まずは接続を試みてください。</p><p>プロセスID: {process.pid}</p><p><a href="/">戻る</a></p>'
     
     except Exception as e:
-        print(f"実行中に予期せぬエラーが発生しました: {e}")
-        return f'<h2>❌ 実行中に予期せぬエラーが発生しました。</h2><p>Python例外: {e}</p><p><a href="/">戻る</a></p>'
+        print(f"サーバー起動中にエラーが発生しました: {e}")
+        return f'<h2>❌ サーバー起動中にエラーが発生しました。</h2><p>Python例外: {e}</p><p><a href="/">戻る</a></p>'
