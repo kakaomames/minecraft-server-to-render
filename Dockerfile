@@ -1,6 +1,6 @@
 # Java実行環境 (OpenJDK 17) を持つベースイメージに変更
 # 🚨 修正: 存在しないタグから 'jre-slim' へ変更
-FROM openjdk:17-jre-slim 
+FROM openjdk:17-slim 
 
 # 必要なパッケージをインストール
 RUN apt-get update && apt-get install -y wget curl
