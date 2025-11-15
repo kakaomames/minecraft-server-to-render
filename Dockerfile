@@ -1,8 +1,9 @@
-# Java実行環境 (OpenJDK 17) を持つベースイメージに変更
-# 🚨 修正: 存在しないタグから 'jre-slim' へ変更
-FROM openjdk:17-slim 
+# 🚨 最終修正: 公式の非推奨タグを避け、推奨される代替イメージ Eclipse Temurin (JRE 17) を使用
+# 'jre' (実行環境) と 'focal' (安定したUbuntuベース) を選択
+FROM eclipse-temurin:17-jre-focal 
 
-# 必要なパッケージをインストール
+# 必要なパッケージをインストール (Temurin イメージは slim なので wget/curl を追加)
+# Renderのビルド環境では、apt-get update が必須
 RUN apt-get update && apt-get install -y wget curl
 
 # 🚨 環境変数の設定 (ダウンロードURLを適用)
