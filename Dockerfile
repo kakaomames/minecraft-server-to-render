@@ -1,6 +1,6 @@
 # 🚨 最終修正: 公式の非推奨タグを避け、推奨される代替イメージ Eclipse Temurin (JRE 17) を使用
 # 'jre' (実行環境) と 'focal' (安定したUbuntuベース) を選択
-FROM eclipse-temurin:17-jre-focal 
+FROM eclipse-temurin:21-jre-focal 
 
 # 必要なパッケージをインストール (Temurin イメージは slim なので wget/curl を追加)
 # Renderのビルド環境では、apt-get update が必須
