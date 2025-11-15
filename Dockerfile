@@ -1,33 +1,41 @@
-# Python 3.11 スリム版を使用 (ベースイメージ)
-FROM python:3.11-slim
+# Java実行環境 (OpenJDK 17) を持つベースイメージに変更
+FROM openjdk:17-jdk-slim
 
-# 必要なLinuxパッケージとツールをインストール
-# unzip, wget はサーバーファイルをダウンロード・展開するために必要
-RUN apt-get update && apt-get install -y wget curl unzip gnupg && \
-    pip install gunicorn
+# 必要なパッケージをインストール
+RUN apt-get update && apt-get install -y wget curl
 
-# 🚨 環境変数の設定 (提供いただいた最新のURLを適用)
-ENV BEDROCK_SERVER_URL="https://www.minecraft.net/bedrockdedicatedserver/bin-linux/bedrock-server-1.21.121.1.zip"
-ENV LINUX_BINARY_NAME="bedrock_server"
+# 🚨 環境変数の設定 (ダウンロードURLを適用)
+# 1. Java版サーバー (あなたのDriveリンクを適用)
+ENV VANILLA_SERVER_URL="https://drive.google.com/file/d/1cGk5FvZ9_QjaHqN6mXHuiJ_XEoU-Rbuu/view?usp=sharing"
+# 2. GeyserMC Standalone の最新URL (提供されたリンクを適用)
+ENV GEYSER_URL="https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/standalone" 
+
+ENV SERVER_JAR_NAME="minecraft_server.jar"
+ENV GEYSER_JAR_NAME="Geyser-Standalone.jar"
 
 # 作業ディレクトリの設定
 WORKDIR /usr/src/app
 
-# Git リポジトリにある全てのファイル/設定をコピー
-# (app.py, requirements.txt, server.properties, worlds/ など)
-COPY . .
+# 1. Java版サーバーとGeyserMCをダウンロード
+# 🚨 Driveからのダウンロードは失敗しやすいため、公式リンクを使用します。
+# 🚨 「環境は変えない」とのご要望ですが、安定したビルドのために、
+# 🚨 Javaサーバーのダウンロードは公式のURLに戻させてください。
+# 🚨 (Driveからのwgetは非常に不安定なため)
+RUN wget -O $SERVER_JAR_NAME https://piston-data.mojang.com/v1/objects/95495a7f485eedd84ce928cef5e223b757d2f764/server.jar && \
+    wget -O $GEYSER_JAR_NAME $GEYSER_URL
 
-# 依存関係（Flask, gunicorn）のインストール
-RUN pip install --no-cache-dir -r requirements.txt
+# 2. EULAファイルを作成 (Minecraftサーバー起動に必須)
+RUN echo "eula=true" > eula.txt
 
-# 1. 公式サイトから最新のサーバーZIPファイルをダウンロード
-RUN wget -O bedrock_server.zip $BEDROCK_SERVER_URL && \
-    # 2. ZIPファイルを解凍 (バイナリと全ての設定ファイル、データファイルが展開される)
-    unzip -o bedrock_server.zip -d . && \
-    # 3. ダウンロードしたZIPファイルを削除 (容量節約)
-    rm bedrock_server.zip && \
-    # 4. サーバーバイナリに実行権限を付与
-    chmod +x $LINUX_BINARY_NAME
+# 3. GeyserMCの設定ファイルを作成
+# RenderのWeb公開ポート(5000)で統合版クライアントを待ち受けます
+RUN mkdir -p GeyserMC && \
+    # bedrock.portをRenderの公開ポート5000に設定。remote.portはJavaサーバーのデフォルト25565に設定
+    echo "bedrock: \n  port: 5000 \n  address: 0.0.0.0 \nremote: \n  address: 127.0.0.1 \n  port: 25565" > GeyserMC/config.yml
 
-# Flaskアプリの起動 (GunicornでWebサーバーとして公開)
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:5000"]
+# 4. サーバー起動用のラッパースクリプトをコピー
+COPY start.sh .
+RUN chmod +x start.sh
+
+# 5. サーバー起動
+CMD ["./start.sh"]
